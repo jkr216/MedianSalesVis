@@ -1,0 +1,79 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+
+```{r setup, message=FALSE}
+##load up the necessary packages
+library(readr)
+library(dplyr)
+library(tidyr)
+library(lubridate)
+library(stringr)
+library(readxl)
+library(ggplot2)
+library(scales)
+library(zoo)
+```
+
+```{r}
+library(readxl)
+metrohomeprices <- read_excel("~/MedianSalesVis/metrohomeprices.xls", 
+    skip = 3)
+colnames(metrohomeprices) <- metrohomeprices[1, ]
+metrohomeprices <- metrohomeprices[c(-1:-2, -188:-350), c(-1,-3:-5, -11)]
+metrohomeprices[,c(2:6)] = apply(metrohomeprices[,c(2:6)], 2, function(x) as.numeric(x))
+metro_t <- t(metrohomeprices)
+##add the correct column names and delete the first row, then coerce to a dataframe
+colnames(metro_t) <- metro_t[1,]
+metro_t<-metro_t[-1,]
+metro_t<- data.frame(metro_t)
+rownames(metrohomeprices)<-c()
+
+metro_t[,c(2:6)] = apply(metro_t[,c(2:6)], 2, function(x) as.numeric(x))
+metro_t$quarter <- colnames(metrohomeprices)[2:6]
+metro_t$date <- seq(mdy('06/30/2015'),mdy('06/30/2016'),by='quarters')
+
+##gather and columns for code and level
+metros_gathered <- data.frame(metro_t) %>% 
+                   gather(name, value, -date, -quarter) %>% 
+                   mutate(code = c(rep("US", times = 5), 
+                   rep("region", times = 20), rep("metro", times = 910))) %>% 
+                   mutate(type = rep("level", times = 935)) %>% 
+                   mutate(value = as.numeric(value))
+
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file).
+```{r}
+
+#create the plot
+g.slope <- ggplot(data=subset(metros_gathered, code == "US" & (quarter == "2015.II" | quarter ==
+                        "2016.II p") & type ==  "level"), 
+                        aes(x= quarter, y= value, group = name, label= paste("", name, "\n", 
+                        dollar(round(value,0)), "k ",sep=""))) +  
+  #we need to group by metros, and create a label
+  geom_path(data=subset(metros_gathered, code=="metro" & (quarter == "2015.II" | quarter =="2016.II p") &
+                          type=="level"), color="gray", alpha=0.7) +
+  geom_point(data=subset(metros_gathered, code=="metro" & (quarter == "2015.II" | quarter =="2016.II p")&
+                           type=="level"), color="gray", alpha=0.7) + 
+  theme_minimal() +
+  
+  #create a red line for the U.S.
+  geom_path(color="red") + 
+  geom_text(color="red") + 
+  scale_y_log10(breaks=seq(100,1100,100)) +
+  geom_point(color="red",size=2) +
+  labs(x= "quarter", y= "Median sales price (Ths $, log scale)", title="Change in house prices 2015Q2 to 2016Q2")
+
+g.slope
+
+```
+
